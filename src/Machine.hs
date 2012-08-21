@@ -1,4 +1,7 @@
-module Machine where
+module Machine
+  ( exec
+  , tryExec
+  ) where
 
 import qualified Data.ByteString.Lazy as BS
 import Data.Word
@@ -29,6 +32,16 @@ step (Brace ops) m = step (Brace ops) (stepMany ops m)
 
 stepMany :: [BrainfuckOperation] -> MachineState -> MachineState
 stepMany ops m = foldl (flip step) m ops
+
+exec :: [BrainfuckOperation] -> BS.ByteString
+exec ops = result
+  where
+    MachineState { output = result } = stepMany ops (initial BS.empty)
+
+tryExec (Left err) = error (show err)
+tryExec (Right ops) = result
+  where
+    MachineState { output = result } = stepMany ops (initial BS.empty)
 
 main = do
   (print . printable) $ stepMany testOps (initial BS.empty)

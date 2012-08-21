@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module Operation
   ( BrainfuckOperation (..)
   , brainfuckParser
@@ -10,6 +10,7 @@ import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Text.Parsec
 import Text.Parsec.ByteString
+import Language.Haskell.TH.Syntax
 
 data BrainfuckOperation
   = Next
@@ -21,6 +22,9 @@ data BrainfuckOperation
   | Brace [BrainfuckOperation]
   deriving (Eq, Show)
 
+instance Lift BrainfuckOperation where
+  lift op = [| op |]
+
 single :: Parser BrainfuckOperation
 single = msum [ ( char '>' >> return Next )
               , ( char '<' >> return Prev )
@@ -29,13 +33,20 @@ single = msum [ ( char '>' >> return Next )
               , ( char '.' >> return Put  )
               , ( char ',' >> return Get  )
               , brace
-              , ( noneOf "[]" >> single   )
               ]
 
 brace :: Parser BrainfuckOperation
 brace = Brace <$> ( char '[' *> many single <* char ']' )
 
-brainfuckParser = many single <* eof
+brainfuckParser :: Parser [BrainfuckOperation]
+brainfuckParser =
+  ( eof >> return [] )
+  <|> do
+    { skipMany $ notFollowedBy single >> anyChar
+    ; op1 <- many single
+    ; op2 <- brainfuckParser
+    ; return $ op1 ++ op2
+    }
 
 testOps :: [BrainfuckOperation]
 testOps = let Right ops = parse brainfuckParser "" test
