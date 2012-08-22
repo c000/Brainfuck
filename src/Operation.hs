@@ -9,7 +9,7 @@ import Control.Applicative ((<*), (<*>), (*>), (<$>))
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Text.Parsec
-import Text.Parsec.ByteString
+import Text.Parsec.String
 import Language.Haskell.TH.Syntax
 
 data BrainfuckOperation
@@ -20,10 +20,15 @@ data BrainfuckOperation
   | Put
   | Get
   | Brace [BrainfuckOperation]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Read)
 
 instance Lift BrainfuckOperation where
   lift op = [| op |]
+
+instance Lift ParseError where
+  lift err = do
+    runIO $ print err
+    [| err |]
 
 single :: Parser BrainfuckOperation
 single = msum [ ( char '>' >> return Next )
@@ -36,20 +41,38 @@ single = msum [ ( char '>' >> return Next )
               ]
 
 brace :: Parser BrainfuckOperation
-brace = Brace <$> ( char '[' *> many single <* char ']' )
+brace = Brace <$> do
+  { char '['
+  ; manyOps
+  }
+  where
+    manyOps = do
+      { lookAhead (char ']')
+      ; return []
+      } <|> do
+      { op <- single
+      ; ops <- manyOps
+      ; return (op : ops)
+      } <|> do
+      { anyChar
+      ; manyOps
+      }
 
 brainfuckParser :: Parser [BrainfuckOperation]
-brainfuckParser =
-  ( eof >> return [] )
-  <|> do
-    { skipMany $ notFollowedBy single >> anyChar
-    ; op1 <- many single
-    ; op2 <- brainfuckParser
-    ; return $ op1 ++ op2
-    }
+brainfuckParser = do
+  { eof
+  ; return []
+  } <|> do
+  { op <- single
+  ; ops <- brainfuckParser
+  ; return (op : ops)
+  } <|> do
+  { anyChar
+  ; brainfuckParser
+  }
 
 testOps :: [BrainfuckOperation]
 testOps = let Right ops = parse brainfuckParser "" test
           in ops
 
-test = BS.pack "++++++++++[>++++++++++<-] >++++.+++++++.--------.--."
+test = "++++++++++[>++++++++++<-] >++++.+++++++.--------.--."
