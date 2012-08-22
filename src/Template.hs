@@ -21,6 +21,7 @@ brainfuck = QuasiQuoter
 brainfuckQ :: String -> Q Exp
 brainfuckQ rawStr = do
   operations <- runIO $ do
-    op <- readProcess "./Parser" [] rawStr
+    (_,op,err) <- readProcessWithExitCode "./Parser" [] rawStr
+    putStrLn err
     return op
   [e| operations |]
